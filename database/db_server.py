@@ -1,5 +1,5 @@
 import asyncio
-import sql_fun as db
+from database import db_fun as db
 from common.network import send_msg, recv_msg
 
 HOST = "0.0.0.0"

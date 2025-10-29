@@ -1,11 +1,12 @@
-# dal_sqlite.py
 import sqlite3
 import hashlib
 from datetime import datetime
 import uuid
+import os
+
 
 DB_PATH = "data.db"
-INIT_SQL_FILE = "init_sql.sql"
+INIT_SQL_FILE = os.path.join(os.path.dirname(__file__), "init_sql.sql")
 
 #part1:初始化資料庫連線與結構
 
@@ -31,17 +32,20 @@ def hash_password(password: str) -> str:
 
 
 def create_user(name: str, password: str):
-    """註冊新使用者"""
+    """註冊新使用者（註冊後自動登入）"""
     try:
         with get_conn() as conn:
-            conn.execute(
-                "INSERT INTO users (name, password_hash) VALUES (?, ?)",
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO users (name, password_hash, is_logged_in, last_login_at) VALUES (?, ?, 1, datetime('now'))",
                 (name, hash_password(password)),
             )
             conn.commit()
-        return {"ok": True, "msg": f"User '{name}' created."}
+            user_id = cur.lastrowid
+        return {"ok": True, "id": user_id, "msg": f"User '{name}' created & logged in."}
     except sqlite3.IntegrityError:
         return {"ok": False, "error": f"Username '{name}' already exists."}
+
 
 def login_user(name: str, password: str):
     """登入使用者"""

@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
     is_logged_in INTEGER DEFAULT 0,                   -- 登入狀態 (0=離線, 1=在線)
     current_room_id INTEGER DEFAULT NULL,             -- 玩家目前所在房間 (NULL 表示未在房間)
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,        -- 建立時間
-    last_login_at TEXT,                               -- 最後登入時間
+    last_login_at TEXT                               -- 最後登入時間
 );
 
 -- ========================================
