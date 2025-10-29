@@ -75,6 +75,7 @@ def logout_user(user_id: int):
             (user_id,),
         )
         conn.commit()
+        return {"ok": True, "msg": f"User {user_id} logged out."}
 
 def get_online_users():
     """查詢所有在線使用者"""

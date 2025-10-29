@@ -93,8 +93,13 @@ async def handle_client(reader, writer):
     except asyncio.IncompleteReadError:
         print(f"❌ 客戶端 {addr} 中斷連線")
     finally:
-        writer.close()
-        await writer.wait_closed()
+        # 🧩 安全關閉區段
+        try:
+            writer.close()
+            await writer.wait_closed()
+        except (ConnectionResetError, OSError):
+            # ⚠️ 忽略常見的斷線錯誤（例如對方已關閉 socket）
+            pass
 
 
 # ----------------------------

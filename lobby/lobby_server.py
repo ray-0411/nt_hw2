@@ -8,6 +8,8 @@ DB_HOST = "127.0.0.1"       # DB Server 位址
 DB_PORT = 9000              # DB Server 監聽埠
 LOBBY_HOST = "0.0.0.0"      # Lobby Server 對外開放 IP
 LOBBY_PORT = 8000           # Lobby Server 監聽埠
+db_reader = None
+db_writer = None
 
 # -------------------------------
 # 記憶體內資料結構
@@ -26,13 +28,15 @@ invites = {}
 # 與 DB Server 溝通
 # -------------------------------
 async def db_request(req: dict):
-    """把 JSON 請求轉送給 DB Server 並回傳回應"""
-    reader, writer = await asyncio.open_connection(DB_HOST, DB_PORT)
-    await send_msg(writer, req)
-    resp = await recv_msg(reader)
-    writer.close()
-    await writer.wait_closed()
-    return resp
+    """透過既有的持續 TCP 連線與 DB Server 溝通"""
+    global db_reader, db_writer
+    try:
+        await send_msg(db_writer, req)
+        resp = await recv_msg(db_reader)
+        return resp
+    except Exception as e:
+        print(f"⚠️ DB Server 通訊錯誤: {e}")
+        return {"ok": False, "error": str(e)}
 
 
 # -------------------------------
@@ -232,11 +236,25 @@ async def handle_client(reader, writer):
 # 主程式入口
 # -------------------------------
 async def main():
+    global db_reader, db_writer
+
+    # 啟動時就連上 DB Server
+    db_reader, db_writer = await asyncio.open_connection(DB_HOST, DB_PORT)
+    print(f"✅ 已連線至 DB Server {DB_HOST}:{DB_PORT}")
+
+    # 啟動 Lobby Server
     server = await asyncio.start_server(handle_client, LOBBY_HOST, LOBBY_PORT)
     addr = server.sockets[0].getsockname()
     print(f"✅ Lobby Server 啟動於 {addr}")
-    async with server:
-        await server.serve_forever()
+
+    try:
+        async with server:
+            await server.serve_forever()
+    finally:
+        if db_writer:
+            db_writer.close()
+            await db_writer.wait_closed()
+            print("🛑 已關閉 DB 連線。")
 
 if __name__ == "__main__":
     asyncio.run(main())
