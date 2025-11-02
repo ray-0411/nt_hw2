@@ -230,6 +230,18 @@ async def handle_client(reader, writer):
         for uid, info in list(online_users.items()):
             if info["writer"] is writer:
                 print(f"👋 玩家離線 id={uid}")
+                
+                # 通知 DB Server 登出
+                try:
+                    await db_request({
+                        "collection": "User",
+                        "action": "logout",
+                        "data": {"id": uid}
+                    })
+                    print(f"🗂 已通知 DB Server 登出使用者 id={uid}")
+                except Exception as e:
+                    print(f"⚠️ 登出通知 DB Server 失敗：{e}")
+                
                 online_users.pop(uid)
                 break
         try:
@@ -249,6 +261,13 @@ async def main():
     # 啟動時就連上 DB Server
     db_reader, db_writer = await asyncio.open_connection(DB_HOST, DB_PORT)
     print(f"✅ 已連線至 DB Server {DB_HOST}:{DB_PORT}")
+    
+    # Lobby 初始化
+    resp = await db_request({"collection": "Lobby", "action": "init"})
+    if resp.get("ok"):
+        print("🧹 Lobby 初始化：所有使用者狀態已重設。")
+    else:
+        print(f"⚠️ Lobby 初始化失敗：{resp.get('error')}")
 
     # 啟動 Lobby Server
     server = await asyncio.start_server(handle_client, LOBBY_HOST, LOBBY_PORT)

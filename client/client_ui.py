@@ -110,8 +110,15 @@ async def lobby_phase(client: LobbyClient):
 
         elif cmd == "7":
             resp = await client.logout()
-            print("👋", resp)
+            username = resp.get('name', '玩家')
+            if resp.get("ok"):
+                print(f"👋 登出成功，再見 {username}！")
+            else:
+                print(f"⚠️ 登出失敗：{resp.get('error', '未知錯誤')}")
+
+            time.sleep(1)
             return
+
 
         else:
             print("❌ 無效指令。")
@@ -121,8 +128,10 @@ async def main():
     await client.connect()
     print("✅ 已連線到 Lobby Server")
 
-    logged_in = await login_phase(client)
-    if logged_in:
+    while True:
+        logged_in = await login_phase(client)
+        if not logged_in:
+            break  # 使用者選擇離開
         await lobby_phase(client)
 
     await client.close()

@@ -20,7 +20,10 @@ async def handle_request(req: dict):
 
     try:
         # ---------- User ----------
-        if collection == "User":
+        if collection == "Lobby":
+            if action == "init":
+                return db.lobby_init()
+        elif collection == "User":
             if action == "create":
                 return db.create_user(data["name"], data["password"])
             elif action == "login":
@@ -71,6 +74,8 @@ async def handle_request(req: dict):
                 )
             elif action == "list_results":
                 return {"ok": True, "results": db.list_game_results(data["gamelog_id"])}
+        
+        
 
         return {"ok": False, "error": f"Unknown collection/action: {collection}/{action}"}
 
@@ -98,6 +103,7 @@ async def handle_client(reader, writer):
     except asyncio.IncompleteReadError:
         print(f"❌ 客戶端 {addr} 中斷連線")
     finally:
+        print(f"🔌 關閉連線 {addr}")
         # 🧩 安全關閉區段
         try:
             writer.close()

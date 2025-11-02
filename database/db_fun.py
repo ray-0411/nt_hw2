@@ -30,6 +30,13 @@ def hash_password(password: str) -> str:
     """用 SHA256 雜湊密碼"""
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
+def lobby_init():
+    """Lobby 初始化時呼叫：重設所有使用者登入狀態"""
+    with get_conn() as conn:
+        conn.execute("UPDATE users SET is_logged_in=0, current_room_id=NULL")
+        conn.commit()
+    print("🧹 Lobby Init: 所有使用者已標記為離線。")
+    return {"ok": True, "msg": "All users reset to offline."}
 
 def create_user(name: str, password: str):
     """註冊新使用者（註冊後自動登入）"""
@@ -75,12 +82,21 @@ def login_user(name: str, password: str):
 def logout_user(user_id: int):
     """登出使用者"""
     with get_conn() as conn:
-        conn.execute(
+        cur = conn.cursor()
+        # 取出使用者名稱
+        cur.execute("SELECT name FROM users WHERE id=?", (user_id,))
+        row = cur.fetchone()
+        username = row[0] if row else None
+
+        # 更新狀態
+        cur.execute(
             "UPDATE users SET is_logged_in=0, current_room_id=NULL WHERE id=?",
             (user_id,),
         )
         conn.commit()
-        return {"ok": True, "msg": f"User {user_id} logged out."}
+
+    print(f"🗂 使用者登出: id={user_id}, name={username}")
+    return {"ok": True, "id": user_id, "name": username, "msg": "User logged out."}
 
 def get_online_users():
     """查詢所有在線使用者"""
