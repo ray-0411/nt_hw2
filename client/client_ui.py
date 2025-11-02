@@ -72,6 +72,8 @@ async def login_phase(client: LobbyClient):
 
 async def lobby_phase(client: LobbyClient):
     while True:
+        clear_screen()
+        
         print(f"\n🎮 玩家：{client.username}")
         print("1. 顯示線上使用者")
         print("2. 顯示房間清單")
@@ -83,8 +85,25 @@ async def lobby_phase(client: LobbyClient):
         cmd = input("請輸入指令：").strip()
 
         if cmd == "1":
+            clear_screen()
+            
             resp = await client.list_online_users()
-            print("📋 線上使用者：", resp.get("users"))
+            users = resp.get("users", [])
+
+            print("\n📋 線上使用者清單：")
+            if not users:
+                print("（目前沒有使用者在線上）")
+            else:
+                # 過濾掉自己
+                others = [name for uid, name in users if uid != client.user_id]
+
+                if not others:
+                    print("（目前只有你在線上）")
+                else:
+                    for i, name in enumerate(others, start=1):
+                        print(f"{i}. {name}")
+
+            input("\n🔙 按下 Enter 鍵返回選單...")
 
         elif cmd == "2":
             resp = await client.list_rooms()
