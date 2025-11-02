@@ -51,15 +51,20 @@ def login_user(name: str, password: str):
     """登入使用者"""
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT id, password_hash FROM users WHERE name=?", (name,))
+        cur.execute("SELECT id, password_hash, is_logged_in FROM users WHERE name=?", (name,))
         row = cur.fetchone()
         if not row:
             return {"ok": False, "error": "User not found."}
 
-        user_id, pw_hash = row
+        user_id, pw_hash, is_logged_in = row
         if pw_hash != hash_password(password):
             return {"ok": False, "error": "Invalid password."}
 
+        # ✅ 檢查是否已登入
+        if is_logged_in:
+            return {"ok": False, "error": "User already logged in elsewhere."}
+
+        # 更新登入狀態
         cur.execute(
             "UPDATE users SET is_logged_in=1, last_login_at=? WHERE id=?",
             (datetime.now().isoformat(), user_id),

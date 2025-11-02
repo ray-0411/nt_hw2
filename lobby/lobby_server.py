@@ -1,5 +1,9 @@
 import asyncio
+import logging
 from common.network import send_msg, recv_msg
+
+asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+logging.getLogger("asyncio").setLevel(logging.CRITICAL)
 
 # -------------------------------
 # 設定區
@@ -228,8 +232,12 @@ async def handle_client(reader, writer):
                 print(f"👋 玩家離線 id={uid}")
                 online_users.pop(uid)
                 break
-        writer.close()
-        await writer.wait_closed()
+        try:
+            writer.close()
+            await writer.wait_closed()
+        except (ConnectionResetError, OSError):
+            # ✅ 忽略 WinError 64 等常見錯誤
+            pass
 
 
 # -------------------------------

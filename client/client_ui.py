@@ -1,8 +1,15 @@
 import asyncio
 from client.client_net import LobbyClient
+import os
+import time
+
+
 
 async def login_phase(client: LobbyClient):
     while True:
+        #clear terminal screen
+        clear_screen()
+        
         print("\n=== 🧩 登入選單 ===")
         print("1. 註冊")
         print("2. 登入")
@@ -13,22 +20,55 @@ async def login_phase(client: LobbyClient):
             name = input("使用者名稱：")
             pw = input("密碼：")
             resp = await client.register(name, pw)
-            print("📥", resp)
+            
             if resp.get("ok"):
+                # ✅ 顯示註冊成功訊息
+                print(f"✅ 註冊成功！歡迎，{name}！")
                 return True
+            else:
+                # get error message
+                error_msg = resp.get("error", "未知錯誤，請稍後再試。")
+
+                if "already exists" in error_msg:
+                    print("⚠️ 此使用者名稱已被註冊，請換一個。")
+                else:
+                    print(f"❌ 註冊失敗：{error_msg}")
+            time.sleep(1.5)
+            
 
         elif cmd == "2":
             name = input("使用者名稱：")
             pw = input("密碼：")
             resp = await client.login(name, pw)
-            print("📥", resp)
+            #print("📥", resp)
+            
+            #login successful
             if resp.get("ok"):
+                print(f"✅ 登入成功！歡迎，{resp.get('name', name)}！")
+                time.sleep(1)
                 return True
+            
+            #login failed
+            else:
+                # get error message
+                error_msg = resp.get("error", "未知錯誤，請稍後再試。")
+
+                # 依錯誤內容做不同提示
+                if error_msg == "User not found.":
+                    print("❌ 帳號不存在，請先註冊。")
+                elif error_msg == "Invalid password.":
+                    print("❌ 密碼錯誤，請再試一次。")
+                elif error_msg == "User already logged in elsewhere.":
+                    print("⚠️ 該帳號已在其他地方登入。")
+                else:
+                    print(f"❌ 登入失敗：{error_msg}")
+            time.sleep(1.5)
 
         elif cmd == "0":
             return False
         else:
-            print("❌ 無效指令。")
+            print("❌ 請輸入0,1,2。")
+        
 
 async def lobby_phase(client: LobbyClient):
     while True:
@@ -87,6 +127,13 @@ async def main():
 
     await client.close()
     print("🛑 已關閉連線")
+
+def clear_screen():
+    # Windows
+    if os.name == "nt":
+        os.system("cls")
+    else:
+        os.system("clear")
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -1,6 +1,11 @@
 import asyncio
+import logging
 from database import db_fun as db
 from common.network import send_msg, recv_msg
+
+
+asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+logging.getLogger("asyncio").setLevel(logging.CRITICAL)
 
 HOST = "0.0.0.0"
 PORT = 9000
