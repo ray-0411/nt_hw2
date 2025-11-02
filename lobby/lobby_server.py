@@ -115,6 +115,27 @@ async def handle_request(req, writer):
         elif action == "close":
             resp = await db_request(req)
             return resp
+        
+        elif action == "join":
+            resp = await db_request(req)
+            if resp.get("ok"):
+                rid = data["room_id"]
+                uid = data["user_id"]
+
+                # 記錄玩家進入房間（Lobby 快取）
+                if rid not in rooms:
+                    rooms[rid] = {"name": f"Room_{rid}", "host": None, "members": []}
+                rooms[rid]["members"].append(uid)
+                online_users[uid]["room_id"] = rid
+
+                # 廣播更新
+                await broadcast_room(rid, {
+                    "type": "room_update",
+                    "room_id": rid,
+                    "members": rooms[rid]["members"]
+                })
+
+            return resp
 
 
     # === 3️⃣ Invite 相關 ===

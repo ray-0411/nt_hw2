@@ -79,6 +79,19 @@ class LobbyClient:
         """關閉自己建立的房間"""
         data = {"room_id": room_id, "host_user_id": self.user_id}
         return await self._req("Room", "close", data)
+    
+    async def join_room(self, room_id, password=None):
+        """加入指定房間"""
+        if not self.user_id:
+            return {"ok": False, "error": "請先登入"}
+
+        data = {
+            "room_id": room_id,
+            "user_id": self.user_id,
+            "password": password
+        }
+
+        return await self._req("Room", "join", data)
 
     # -------------------------------
     # 邀請相關

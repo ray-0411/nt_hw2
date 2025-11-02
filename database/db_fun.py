@@ -40,6 +40,8 @@ def lobby_init():
         cur.execute("UPDATE users SET is_logged_in=0, current_room_id=NULL")
         # 2️⃣ 所有房間設為 closed
         cur.execute("UPDATE rooms SET status='closed'")
+        # 🔹 清除所有邀請紀錄
+        cur.execute("DELETE FROM room_invites")
         
         conn.commit()
     
@@ -123,7 +125,9 @@ def get_online_users():
         cur.execute("SELECT id, name FROM users WHERE is_logged_in=1 ORDER BY id")
         return cur.fetchall()
 
+####################
 #part3:rooms操作函式
+####################
 
 #use 
 def create_room(name: str, host_user_id: int, visibility="public", password=None):
@@ -151,7 +155,8 @@ def list_rooms():
             SELECT r.id, r.name, u.name AS host_name, r.visibility, r.status, r.created_at
             FROM rooms r
             JOIN users u ON r.host_user_id = u.id
-            WHERE r.status = 'idle'      -- ✅ 只顯示空閒房間
+            WHERE r.status = 'idle'             -- ✅ 只顯示可用房間
+                AND (r.guest_user_id IS NULL)   -- ✅ 只顯示未被佔用的房間
             ORDER BY r.id
             """
         )
@@ -188,10 +193,44 @@ def close_room(room_id: int, host_user_id: int):
         cur.execute("UPDATE users SET current_room_id=NULL WHERE id=?", (host_user_id,))
         
         # 🔹 清除所有該房間的邀請
-        cur.execute("DELETE FROM invites WHERE room_id=?", (room_id,))
+        cur.execute("DELETE FROM room_invites WHERE room_id=?", (room_id,))
         
         conn.commit()
     print(f"🏁 房間已關閉 id={room_id}")
+    return {"ok": True}
+
+
+def join_room(room_id: int, user_id: int, password=None):
+    """玩家加入房間（檢查狀態與密碼）"""
+    with get_conn() as conn:
+        cur = conn.cursor()
+
+        # 查詢房間狀態
+        cur.execute("SELECT visibility, password_hash, status FROM rooms WHERE id=?", (room_id,))
+        row = cur.fetchone()
+        if not row:
+            return {"ok": False, "error": "房間不存在"}
+
+        visibility, pw_hash, status = row
+
+        # 檢查房間狀態
+        if status != "idle":
+            return {"ok": False, "error": "該房間不可加入（可能已開始或已關閉）"}
+
+        # 若是 private，檢查密碼
+        if visibility == "private":
+            if not password:
+                return {"ok": False, "error": "此房間需要密碼"}
+            if hash_password(password) != pw_hash:
+                return {"ok": False, "error": "密碼錯誤"}
+        
+        # ✅ 更新 guest_user_id
+        cur.execute("UPDATE rooms SET guest_user_id=? WHERE id=?", (user_id, room_id))
+        # 更新使用者所在房間
+        cur.execute("UPDATE users SET current_room_id=? WHERE id=?", (room_id, user_id))
+        conn.commit()
+
+    print(f"🚪 玩家 {user_id} 加入房間 {room_id}")
     return {"ok": True}
 
 #part4:rooms invite操作函式
@@ -200,7 +239,7 @@ def create_invite(inviter_id, invitee_id, room_id):
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute(
-            "INSERT INTO invites (from_user_id, to_user_id, room_id, created_at) VALUES (?, ?, ?, datetime('now'))",
+            "INSERT INTO room_invites (from_user_id, to_user_id, room_id, created_at) VALUES (?, ?, ?, datetime('now'))",
             (inviter_id, invitee_id, room_id)
         )
         conn.commit()

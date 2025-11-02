@@ -46,6 +46,8 @@ async def handle_request(req: dict):
                 return {"ok": True, "rooms": db.list_rooms()}
             elif action == "close":
                 return db.close_room(data["room_id"], data["host_user_id"])
+            elif action == "join":
+                return db.join_room(data["room_id"], data["user_id"], data.get("password"))
 
         # ---------- Invite ----------
         elif collection == "Invite":

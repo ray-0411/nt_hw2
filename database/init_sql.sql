@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS rooms (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,                               -- 房間名稱
     host_user_id INTEGER NOT NULL,                    -- 房主 ID
+    guest_user_id INTEGER DEFAULT NULL,
     visibility TEXT CHECK(visibility IN ('public', 'private')) DEFAULT 'public',  -- 公開/私有
     password_hash TEXT,                               -- 私有房間密碼 (雜湊儲存)
     status TEXT CHECK(status IN ('idle', 'playing', 'closed')) DEFAULT 'idle',     -- 房間狀態
