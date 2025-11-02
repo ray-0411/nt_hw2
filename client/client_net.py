@@ -63,28 +63,42 @@ class LobbyClient:
     async def list_rooms(self):
         return await self._req("Room", "list")
 
-    async def create_room(self, name, visibility="public"):
+    async def create_room(self, name, visibility="public", password=None):
         if not self.user_id:
             return {"ok": False, "error": "請先登入"}
-        data = {"name": name, "host_user_id": self.user_id, "visibility": visibility}
+        
+        data = {"name": name, 
+                "host_user_id": self.user_id, 
+                "visibility": visibility}
+        if password:
+            data["password"] = password
+        
         return await self._req("Room", "create", data)
-
-    async def join_room(self, room_id):
-        if not self.user_id:
-            return {"ok": False, "error": "請先登入"}
-        data = {"user_id": self.user_id, "room_id": room_id}
-        return await self._req("Room", "join", data)
-
-    async def leave_room(self):
-        if not self.user_id:
-            return {"ok": False, "error": "請先登入"}
-        data = {"user_id": self.user_id}
-        return await self._req("Room", "leave", data)
+    
+    async def close_room(self, room_id):
+        """關閉自己建立的房間"""
+        data = {"room_id": room_id, "host_user_id": self.user_id}
+        return await self._req("Room", "close", data)
 
     # -------------------------------
     # 邀請相關
     # -------------------------------
-    async def list_invites(self):
+    
+    async def send_invite(self, target_user_id, room_id):
+        """發送邀請給其他玩家"""
         if not self.user_id:
             return {"ok": False, "error": "請先登入"}
-        return await self._req("Invite", "list", {"user_id": self.user_id})
+
+        # 準備邀請資料
+        data = {
+            "inviter_id": self.user_id,   # 發送者
+            "invitee_id": target_user_id, # 接收者
+            "room_id": room_id
+        }
+
+        # 傳送請求給 Lobby Server
+        resp = await self._req("Invite", "create", data)
+
+        # 回傳伺服器回應
+        return resp
+

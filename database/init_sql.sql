@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS rooms (
     host_user_id INTEGER NOT NULL,                    -- 房主 ID
     visibility TEXT CHECK(visibility IN ('public', 'private')) DEFAULT 'public',  -- 公開/私有
     password_hash TEXT,                               -- 私有房間密碼 (雜湊儲存)
-    status TEXT CHECK(status IN ('idle', 'playing')) DEFAULT 'idle',              -- 房間狀態
+    status TEXT CHECK(status IN ('idle', 'playing', 'closed')) DEFAULT 'idle',     -- 房間狀態
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,        -- 建立時間
     game_port INTEGER,                                -- 遊戲伺服器連線埠 (遊戲中使用)
     FOREIGN KEY (host_user_id) REFERENCES users(id)

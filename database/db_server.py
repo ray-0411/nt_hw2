@@ -44,37 +44,21 @@ async def handle_request(req: dict):
                 )
             elif action == "list":
                 return {"ok": True, "rooms": db.list_rooms()}
-            elif action == "join":
-                return db.join_room(data["user_id"], data["room_id"])
-            elif action == "leave":
-                return db.leave_room(data["user_id"])
+            elif action == "close":
+                return db.close_room(data["room_id"], data["host_user_id"])
 
         # ---------- Invite ----------
         elif collection == "Invite":
             if action == "create":
                 return db.create_invite(
-                    data["room_id"], data["inviter_id"], data["invitee_id"]
+                    data["room_id"],
+                    data["inviter_id"],
+                    data["invitee_id"]
                 )
-            elif action == "list":
-                return {"ok": True, "invites": db.list_invites_for_user(data["user_id"])}
-            elif action == "update":
-                return db.update_invite_status(data["invite_id"], data["status"])
 
         # ---------- Game ----------
         elif collection == "Game":
-            if action == "create_log":
-                return db.create_gamelog(data["room_id"], data["seed"])
-            elif action == "end_log":
-                return db.end_gamelog(
-                    data["gamelog_id"], data.get("winner_user_id"), data.get("reason")
-                )
-            elif action == "add_result":
-                return db.add_game_result(
-                    data["gamelog_id"], data["user_id"], data["score"], data["level"]
-                )
-            elif action == "list_results":
-                return {"ok": True, "results": db.list_game_results(data["gamelog_id"])}
-        
+            pass
         
 
         return {"ok": False, "error": f"Unknown collection/action: {collection}/{action}"}

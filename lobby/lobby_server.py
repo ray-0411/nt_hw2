@@ -111,38 +111,9 @@ async def handle_request(req, writer):
         # 列出公開房間（只轉發）
         elif action == "list":
             return await db_request(req)
-
-        # 加入房間
-        elif action == "join":
+        
+        elif action == "close":
             resp = await db_request(req)
-            if resp.get("ok"):
-                rid = data["room_id"]
-                uid = data["user_id"]
-                if rid in rooms:
-                    rooms[rid]["members"].append(uid)
-                    online_users[uid]["room_id"] = rid
-                    await broadcast_room(rid, {
-                        "type": "room_update",
-                        "room_id": rid,
-                        "members": rooms[rid]["members"]
-                    })
-            return resp
-
-        # 離開房間
-        elif action == "leave":
-            resp = await db_request(req)
-            if resp.get("ok"):
-                uid = data["user_id"]
-                rid = online_users[uid]["room_id"]
-                if rid and rid in rooms:
-                    if uid in rooms[rid]["members"]:
-                        rooms[rid]["members"].remove(uid)
-                        online_users[uid]["room_id"] = None
-                        await broadcast_room(rid, {
-                            "type": "room_update",
-                            "room_id": rid,
-                            "members": rooms[rid]["members"]
-                        })
             return resp
 
 
@@ -151,47 +122,6 @@ async def handle_request(req, writer):
         # 建立邀請（DB 寫入 + Lobby 暫存）
         if action == "create":
             resp = await db_request(req)
-            if resp.get("ok"):
-                invitee = data["invitee_id"]
-                inviter = data["inviter_id"]
-                room_id = data["room_id"]
-
-                # 新增到 invitation list
-                invites.setdefault(invitee, []).append({
-                    "invite_id": resp["invite_id"],
-                    "room_id": room_id,
-                    "inviter": online_users[inviter]["name"],
-                    "status": "pending",
-                })
-
-                # 通知被邀請者（非阻塞）
-                await send_to_user(invitee, {
-                    "type": "invited",
-                    "from": online_users[inviter]["name"],
-                    "room_id": room_id,
-                })
-            return resp
-
-        # 列出邀請清單（不阻塞）
-        elif action == "list":
-            uid = data["user_id"]
-            return {"ok": True, "invites": invites.get(uid, [])}
-
-        # 回覆邀請（更新 DB 並通知雙方）
-        elif action == "update":
-            resp = await db_request(req)
-            if resp.get("ok"):
-                iid = data["invite_id"]
-                status = data["status"]
-                for lst in invites.values():
-                    for inv in lst:
-                        if inv["invite_id"] == iid:
-                            inv["status"] = status
-                await broadcast_room(data["room_id"], {
-                    "type": "invite_update",
-                    "invite_id": iid,
-                    "status": status
-                })
             return resp
 
 
