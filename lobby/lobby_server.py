@@ -216,6 +216,7 @@ async def handle_request(req, writer):
                 "ok": True,
                 "status": room["status"],
                 "guest_joined": bool(guest_id),
+                "guest_id": guest_id,
                 "guest_name": guest_name
             }
         
@@ -244,6 +245,26 @@ async def handle_request(req, writer):
             print(f"👢 房主踢出了玩家 {guest_name} (id={guest_id}) from room {rid}")
             return {"ok": True, "msg": f"玩家 {guest_name} 已被踢出。"}
 
+        elif action == "leave":
+            rid = data.get("room_id")
+            uid = data.get("user_id")
+
+            room = rooms.get(rid)
+            if not room:
+                return {"ok": False, "error": "房間不存在。"}
+
+            user_info = online_users.get(uid)
+            if not user_info:
+                return {"ok": False, "error": "使用者未登入。"}
+
+            if uid == room["guest_id"]:
+                print(f"👋 玩家 {user_info['name']} 離開房間 {rid}")
+                room["guest_id"] = None
+                room["status"] = "space"
+                user_info["room_id"] = None
+                return {"ok": True, "msg": "你已離開房間。"}
+
+            return {"ok": False, "error": "你不在該房間中。"}
 
     # === 3️⃣ Invite 相關 ===
     elif collection == "Invite":

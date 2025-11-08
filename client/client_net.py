@@ -96,6 +96,13 @@ class LobbyClient:
 
         return await self._req("Room", "join", data)
 
+    async def leave_room(self, room_id):
+        """離開當前房間"""
+        if not self.user_id:
+            return {"ok": False, "error": "請先登入"}
+
+        data = {"room_id": room_id, "user_id": self.user_id}
+        return await self._req("Room", "leave", data)
     # -------------------------------
     # 邀請相關
     # -------------------------------

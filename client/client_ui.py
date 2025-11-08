@@ -248,12 +248,13 @@ async def lobby_phase(client: LobbyClient):
             resp = await client.join_room(rid, password)
             if resp and resp.get("ok"):
                 print(f"✅ 成功加入房間：{target_room['name']} (ID={rid})")
+                time.sleep(1)
                 # 這裡可選擇進入房內等待畫面
-                # await room_wait_phase(client, rid, target_room['name'])
+                await asyncio.sleep(1) 
+                await guest_wait_phase(client, rid, target_room["name"])
             else:
                 print(f"❌ 加入失敗：{resp.get('error', '未知錯誤')}")
-
-            input("\n🔙 按下 Enter 鍵返回選單...")
+                input("\n🔙 按下 Enter 鍵返回選單...")
 
         elif cmd == "5":
             await invite_manage_phase(client)
@@ -418,6 +419,73 @@ async def room_wait_phase(client, room_id, room_name):
         stop_flag = True
         listener.cancel()
 
+
+async def guest_wait_phase(client, room_id, room_name):
+    """加入者等待房主開始遊戲（無需重整畫面）"""
+    stop_flag = False
+
+    async def check_room_status():
+        """背景任務：定期檢查房間狀態"""
+        nonlocal stop_flag
+        while not stop_flag:
+            try:
+                resp = await client._req("Room", "status", {"room_id": room_id})
+                if not resp or not resp.get("ok"):
+                    print("\n❌ 房間已被解散。")
+                    await asyncio.sleep(1)
+                    stop_flag = True
+                    break
+
+                status = resp.get("status")
+                guest_id = resp.get("guest_id")
+
+                if not guest_id:
+                    print("\n👢 你已被房主踢出房間。")
+                    await asyncio.sleep(1)
+                    stop_flag = True
+                    break
+
+                if status == "play":
+                    print("\n🚀 房主已開始遊戲！")
+                    stop_flag = True
+                    break
+
+            except Exception as e:
+                print(f"⚠️ 無法檢查房間狀態：{e}")
+                stop_flag = True
+                break
+
+            await asyncio.sleep(1)
+
+    # 顯示一次畫面
+    clear_screen()
+    print(f"\n🚪 加入房間：{room_name} (ID={room_id})")
+    print("⏳ 等待房主開始遊戲...")
+    print("\n【1】離開房間")
+    
+    listener = asyncio.create_task(check_room_status())
+
+    try:
+        while not stop_flag:
+            if msvcrt.kbhit():
+                key = msvcrt.getch().decode("utf-8", errors="ignore")
+                if key == "1":
+                    resp = await client.leave_room(room_id)
+                    if resp.get("ok"):
+                        print("👋 你已離開房間。")
+                        stop_flag = True
+                        await asyncio.sleep(1)
+                    else:
+                        print(f"⚠️ 離開失敗：{resp.get('error', '未知錯誤')}")
+                    stop_flag = True
+                    break
+
+            await asyncio.sleep(0.05)
+    finally:
+        stop_flag = True
+        listener.cancel()
+
+
 async def invite_manage_phase(client):
     """邀請管理介面：顯示、回應邀請"""
     while True:
@@ -469,10 +537,19 @@ async def invite_manage_phase(client):
         resp2 = await client.respond_invite(invite_id, accept)
         if resp2.get("ok"):
             msg = resp2.get("msg", "✅ 已處理邀請。")
+            
+            
+            if accept and "room_id" in resp2:
+                print(f"{msg} 正在加入房間...")
+                room_id = resp2["room_id"]
+                room_name = f"房間 {room_id}"  # 伺服器可能沒傳名稱，可以先用 ID 顯示
+                await asyncio.sleep(1)
+                await guest_wait_phase(client, room_id, room_name)
+                break
         else:
             msg = f"⚠️ {resp2.get('error', '無法處理邀請。')}"
-        print(msg)
-        input("\n按 Enter 鍵繼續...")
+            print(msg)
+            input("\n按 Enter 鍵繼續...")
         
 
 async def main():
