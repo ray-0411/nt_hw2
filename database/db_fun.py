@@ -146,20 +146,23 @@ def create_room(name: str, host_user_id: int, visibility="public", password=None
         return {"ok": True, "room_id": cur.lastrowid}
 
 #use
-def list_rooms():
-    """列出所有房間"""
+def list_rooms(only_available=False):
+    """列出所有房間，可選只顯示還有空位的（guest_user_id 為 NULL）"""
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT r.id, r.name, u.name AS host_name, r.visibility, r.status, r.created_at
+        sql = """
+            SELECT  r.id, r.name, u.name AS host_name, r.visibility, r.status,
+                    r.guest_user_id, r.created_at
             FROM rooms r
             JOIN users u ON r.host_user_id = u.id
-            WHERE r.status = 'idle'             -- ✅ 只顯示可用房間
-                AND (r.guest_user_id IS NULL)   -- ✅ 只顯示未被佔用的房間
-            ORDER BY r.id
-            """
-        )
+            WHERE r.status = 'idle'
+        """
+        if only_available:
+            sql += " AND (r.guest_user_id IS NULL)"
+        sql += " ORDER BY r.id"
+        cur.execute(sql)
+            
+
         rows = cur.fetchall()
         return [
             {
@@ -173,8 +176,6 @@ def list_rooms():
             for r in rows
         ]
 
-
-#use
 def close_room(room_id: int, host_user_id: int):
     """關閉指定房間（僅限房主）"""
     with get_conn() as conn:
@@ -233,14 +234,19 @@ def join_room(room_id: int, user_id: int, password=None):
     print(f"🚪 玩家 {user_id} 加入房間 {room_id}")
     return {"ok": True}
 
+
+
 #part4:rooms invite操作函式
 
 def create_invite(inviter_id, invitee_id, room_id):
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute(
-            "INSERT INTO room_invites (from_user_id, to_user_id, room_id, created_at) VALUES (?, ?, ?, datetime('now'))",
-            (inviter_id, invitee_id, room_id)
+            """
+            INSERT INTO room_invites (room_id, inviter_id, invitee_id, status)
+            VALUES (?, ?, ?, 'pending')
+            """,
+            (room_id, inviter_id, invitee_id),
         )
         conn.commit()
         return {"ok": True, "invite_id": cur.lastrowid}

@@ -43,7 +43,8 @@ async def handle_request(req: dict):
                     data.get("password")
                 )
             elif action == "list":
-                return {"ok": True, "rooms": db.list_rooms()}
+                only_available = data.get("only_available", False)
+                return {"ok": True, "rooms": db.list_rooms(only_available)}
             elif action == "close":
                 return db.close_room(data["room_id"], data["host_user_id"])
             elif action == "join":
@@ -51,12 +52,16 @@ async def handle_request(req: dict):
 
         # ---------- Invite ----------
         elif collection == "Invite":
-            if action == "create":
-                return db.create_invite(
-                    data["room_id"],
-                    data["inviter_id"],
-                    data["invitee_id"]
-                )
+            try:
+                if action == "create":
+                    return db.create_invite(
+                        data["room_id"],
+                        data["inviter_id"],
+                        data["invitee_id"]
+                    )
+            except Exception as e:
+                return {"ok": False, "error": str(e)}
+            
 
         # ---------- Game ----------
         elif collection == "Game":

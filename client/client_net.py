@@ -11,6 +11,7 @@ class LobbyClient:
         self.writer = None
         self.user_id = None
         self.username = None
+        self.lock = asyncio.Lock()
 
     async def connect(self):
         self.reader, self.writer = await asyncio.open_connection(self.host, self.port)
@@ -25,8 +26,9 @@ class LobbyClient:
     # -------------------------------
     async def _req(self, collection, action, data=None):
         req = {"collection": collection, "action": action, "data": data or {}}
-        await send_msg(self.writer, req)
-        return await recv_msg(self.reader)
+        async with self.lock:  # ✅ 同步鎖
+            await send_msg(self.writer, req)
+            return await recv_msg(self.reader)
 
     # -------------------------------
     # 使用者相關
@@ -60,8 +62,9 @@ class LobbyClient:
     # -------------------------------
     # 房間相關
     # -------------------------------
-    async def list_rooms(self):
-        return await self._req("Room", "list")
+    async def list_rooms(self, only_available="space"):
+        data = {"only_available": only_available}
+        return await self._req("Room", "list", data)
 
     async def create_room(self, name, visibility="public", password=None):
         if not self.user_id:
@@ -115,3 +118,23 @@ class LobbyClient:
         # 回傳伺服器回應
         return resp
 
+    async def list_invites(self):
+        """查詢自己收到的邀請"""
+        if not self.user_id:
+            return {"ok": False, "error": "請先登入"}
+
+        data = {"user_id": self.user_id}
+        return await self._req("Invite", "list", data)
+
+    async def respond_invite(self, invite_id, accept=True):
+        """回應邀請（accept=True 同意，False 拒絕）"""
+        if not self.user_id:
+            return {"ok": False, "error": "請先登入"}
+
+        data = {
+            "invitee_id": self.user_id,   # 自己（被邀請者）
+            "invite_id": invite_id,       # 要處理的邀請編號
+            "accept": accept              # True 同意, False 拒絕
+        }
+
+        return await self._req("Invite", "respond", data)
