@@ -70,6 +70,8 @@ class Player:
         self.lines = 0
         self.alive = True
         self.next_queue = deque()
+        self.level = 0
+        self.lines_cleared_total = 0
 
     def enqueue_input(self, ev:str, when_ms:int):
         self.input_q.append((when_ms, ev))
@@ -124,6 +126,7 @@ class Game:
         elif ev == "SD":  # Soft Drop
             if not self.collide(p.board, shape, x, y+1):
                 p.active["y"] += 1
+                p.score += 1
             else:
                 self.lock_piece(p, [(a+x,b+y) for (a,b) in shape])
                 p.active = None
@@ -203,22 +206,36 @@ class Game:
             if y < 0:
                 p.alive = False
                 return
-            p.board[y][x] = 1
+            p.board[y][x] = p.active["kind"]
 
         # 🟩 消行
         full = [i for i,row in enumerate(p.board) if all(row)]
-        for i in full:
-            del p.board[i]
-            p.board.insert(0, [0]*10)
         lines = len(full)
-        p.lines += lines
-        p.score += lines * 100
 
-        # 🟩 如果最上面一行有方塊 → Game Over
+        if lines > 0:
+            for i in full:
+                del p.board[i]
+                p.board.insert(0, [0]*10)
+
+            # 累積總消行
+            p.lines_cleared_total += lines
+            p.lines += lines
+
+            # Level 提升：每滿 10 行升 1 等
+            new_level = p.lines_cleared_total // 10
+            if new_level > p.level:
+                p.level = new_level
+                print(f"⬆️ Player {p.id} level up to {p.level}")
+
+            # 分數表 (NES 規則)
+            score_table = {1: 40, 2: 100, 3: 300, 4: 1200}
+            base = score_table.get(lines, 0)
+            p.score += base * (p.level + 1)
+
+        # 如果最上面一行有方塊 → 死亡
         if any(p.board[0]):
             p.alive = False
 
-        # 🟩 方塊鎖定後允許再次 Hold
         p.can_hold = True
 
 
@@ -234,6 +251,7 @@ class Game:
                 "hold": p.hold,
                 "can_hold": p.can_hold,
                 "score": p.score,
+                "level": p.level,
                 "lines": p.lines,
                 "alive": p.alive
             })
@@ -298,8 +316,18 @@ async def game_loop(game:Game):
                 game.apply_input(p, ev)
 
         # 2) 重力（獨立對每位玩家）
+        level_speed_table = {
+            0: 800, 1: 717, 2: 633, 3: 550, 4: 467, 5: 383, 6: 300, 7: 217,
+            8: 133, 9: 100, 10: 83, 11: 83, 12: 83, 13: 67, 14: 67, 15: 67,
+            16: 50, 17: 50, 18: 50, 19: 33, 20: 33, 29: 17
+        }
+
         for p in game.players.values():
-            if now_ms - last_gravity_ms[p.id] >= game.gravity_ms:
+            # 找對應等級的掉落間隔（預設最快 17ms）
+            lv = min(p.level, 29)
+            drop_ms = level_speed_table.get(lv, 17)
+
+            if now_ms - last_gravity_ms[p.id] >= drop_ms:
                 game.gravity_step(p)
                 last_gravity_ms[p.id] = now_ms
 

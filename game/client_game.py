@@ -9,6 +9,15 @@ MARGIN = 20
 
 HOST, PORT = "127.0.0.1", 9100
 
+COLOR_TABLE = {
+    "I": (0, 200, 200),     # Cyan → 稍灰
+    "O": (230, 230, 90),    # Yellow → 柔和
+    "T": (150, 80, 190),    # Purple → 淡一點
+    "S": (80, 200, 80),     # Green → 不那麼亮
+    "Z": (200, 80, 80),     # Red → 減亮度
+    "J": (80, 100, 200),    # Blue → 柔藍
+    "L": (220, 150, 60)     # Orange → 暖但不刺眼
+}
 
 
 class NetClient:
@@ -65,25 +74,58 @@ class NetClient:
 
 # --- Pygame ---
 
-def draw_board(screen, board, ox, oy, color=(200,200,200)):
-    # board: 20x10, 值=0/1（你可以改成顏色或方塊代號）
+def draw_board(screen, board, ox, oy, cell_size=CELL):
+    """畫出整個棋盤（背景格子 + 方塊 + 外框）"""
+
+    # --- 1️⃣ 背景底格（空格顯示淺灰棋盤） ---
+    for r in range(20):
+        for c in range(10):
+            # 背景每格的顏色 (深灰+淺灰交錯可選)
+            base_color = (40, 40, 40) if (r + c) % 2 == 0 else (45, 45, 45)
+            rect = pygame.Rect(
+                ox + c * cell_size,
+                oy + r * cell_size,
+                cell_size - 1,
+                cell_size - 1
+            )
+            pygame.draw.rect(screen, base_color, rect)
+
+    # --- 2️⃣ 方塊 ---
     for r in range(20):
         for c in range(10):
             v = board[r][c]
-            rect = pygame.Rect(ox+c*CELL, oy+r*CELL, CELL-1, CELL-1)
-            pygame.draw.rect(screen, (50,50,50), rect, 0)
-            if v:
-                pygame.draw.rect(screen, color, rect, 0)
+            if not v:
+                continue
+            col = COLOR_TABLE.get(v, (200, 200, 200))
+            rect = pygame.Rect(
+                ox + c * cell_size,
+                oy + r * cell_size,
+                cell_size - 1,
+                cell_size - 1
+            )
+            pygame.draw.rect(screen, col, rect)
 
-def draw_active(screen, active, ox, oy, color=(80,180,255)):
-    if not active: return
+    # --- 3️⃣ 外框 ---
+    pygame.draw.rect(
+        screen,
+        (200, 200, 200),
+        (ox - 2, oy - 2, 10 * cell_size + 4, 20 * cell_size + 4),
+        2
+    )
+
+
+def draw_active(screen, active, ox, oy, cell_size=CELL):
+    if not active:
+        return
     kind = active["kind"]
     rot = active["rot"]
     x, y = active["x"], active["y"]
+    color = COLOR_TABLE.get(kind, (200,200,200))
     shape = SHAPES[kind][rot]
-    for (a,b) in shape:
-        rect = pygame.Rect(ox + (x+a)*CELL, oy + (y+b)*CELL, CELL-1, CELL-1)
+    for (a, b) in shape:
+        rect = pygame.Rect(ox + (x + a) * cell_size, oy + (y + b) * cell_size, cell_size - 1, cell_size - 1)
         pygame.draw.rect(screen, color, rect)
+
 
 def draw_hold(screen, hold_kind, ox, oy, cell=12):
     """畫出暫存方塊 (縮小版)"""
@@ -91,12 +133,10 @@ def draw_hold(screen, hold_kind, ox, oy, cell=12):
     pygame.draw.rect(screen, (80, 80, 90), (ox-5, oy-5, 6*cell, 6*cell), 2, border_radius=6)
     label = font_small.render("HOLD", True, (230, 230, 230))
     screen.blit(label, (ox, oy - 20))
-
     if not hold_kind:
         return
-
     shape = SHAPES[hold_kind][0]  # 顯示第一個旋轉狀態即可
-    color = (100, 200, 255)       # 暫存顏色
+    color = COLOR_TABLE.get(hold_kind, (200,200,200))       # 暫存顏色
     for (x, y) in shape:
         rect = pygame.Rect(ox + (x+1)*cell, oy + (y+1)*cell, cell-1, cell-1)
         pygame.draw.rect(screen, color, rect)
@@ -107,7 +147,7 @@ async def game_main():
     await net.connect(HOST, PORT, name="Me")
 
     pygame.init()
-    pygame.key.set_repeat(150, 50)
+    pygame.key.set_repeat(200, 75) # 按鍵重複輸入延遲與間隔
     
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("Tetris (No Attack)")
@@ -161,44 +201,52 @@ async def game_main():
 
         # --- 對手棋盤（含 active 掉落方塊） ---
         if op:
-            # 棋盤
+            # --- 對手棋盤 ---
             for r in range(20):
                 for c in range(10):
                     v = op["board"][r][c]
                     rect = pygame.Rect(ox_op + c * CELL_OP, oy_op + r * CELL_OP, CELL_OP - 1, CELL_OP - 1)
-                    pygame.draw.rect(screen, (40, 40, 50), rect, 0)
                     if v:
-                        pygame.draw.rect(screen, (120, 180, 220), rect, 0)
+                        col = COLOR_TABLE.get(v, (150, 150, 150))
+                        pygame.draw.rect(screen, col, rect)
+                    else:
+                        pygame.draw.rect(screen, (40, 40, 50), rect)
 
-            # 掉落方塊 (active)
+            # --- 掉落方塊 (active) ---
             if op["active"]:
                 kind = op["active"]["kind"]
                 rot = op["active"]["rot"]
                 x, y = op["active"]["x"], op["active"]["y"]
                 shape = SHAPES[kind][rot]
+                color = COLOR_TABLE.get(kind, (200,200,200))
                 for (a, b) in shape:
-                    rect = pygame.Rect(ox_op + (x + a) * CELL_OP, oy_op + (y + b) * CELL_OP, CELL_OP - 1, CELL_OP - 1)
-                    pygame.draw.rect(screen, (150, 210, 255), rect)
+                    rect = pygame.Rect(
+                        ox_op + (x + a) * CELL_OP,
+                        oy_op + (y + b) * CELL_OP,
+                        CELL_OP - 1,
+                        CELL_OP - 1
+                    )
+                    pygame.draw.rect(screen, color, rect)
 
-            # 外框
+            # --- 外框 ---
             pygame.draw.rect(screen, (180,180,180),
                             (ox_op-2, oy_op-2, BOARD_W_OP+4, BOARD_H_OP+4), 2)
 
         # --- 自己棋盤（左側主要畫面） ---
         if me:
             if me["alive"]:
-                draw_board(screen, me["board"], ox_me, oy_me, (200,200,100))
-                draw_active(screen, me["active"], ox_me, oy_me, (255,240,120))
+                draw_board(screen, me["board"], ox_me, oy_me)
+                draw_active(screen, me["active"], ox_me, oy_me)
             else:
-                draw_board(screen, me["board"], ox_me, oy_me, (100,100,100))
+                draw_board(screen, me["board"], ox_me, oy_me)
                 font_dead = pygame.font.SysFont("Microsoft JhengHei", 40)
                 txt_dead = font_dead.render("你已死亡", True, (255,120,120))
                 screen.blit(txt_dead, (
                     ox_me + (BOARD_W // 2 - txt_dead.get_width() // 2),
                     oy_me + (BOARD_H // 2 - txt_dead.get_height() // 2)
                 ))
-        
-        # --- HOLD 區塊 ---
+
+            # --- HOLD 區塊 ---
             cell_hold = int(CELL_OP * 1.2)
             hold_x = ox_op
             hold_y = oy_op + BOARD_H_OP + 30
@@ -207,10 +255,10 @@ async def game_main():
             # --- 分數與等級（在 HOLD 下方） ---
             font_info = pygame.font.SysFont("Microsoft JhengHei", 28)
             info_y = hold_y + 6 * cell_hold + 12
-            text_sc = font_info.render(f"分數：{me['score']}", True, (230,230,230))
-            text_lv = font_info.render(f"等級：{me.get('level', 0)}", True, (230,230,230))
-            screen.blit(text_sc, (hold_x, info_y))
-            screen.blit(text_lv, (hold_x, info_y + 30))
+            text_lv = font_info.render(f"Level：{me.get('level', 0)}", True, (230,230,230))
+            text_sc = font_info.render(f"Score：{me['score']}", True, (230,230,230))
+            screen.blit(text_lv, (hold_x, info_y))
+            screen.blit(text_sc, (hold_x, info_y + 30))
 
         pygame.display.flip()
         clock.tick(60)
@@ -229,7 +277,7 @@ async def game_main():
         font_small = pygame.font.SysFont("Microsoft JhengHei", 32)
 
         # 標題
-        title_txt = f"遊戲結束（原因：{reason}）"
+        title_txt = f"遊戲結束"
         text = font_big.render(title_txt, True, (255, 255, 255))
         screen.blit(text, (WIDTH // 2 - text.get_width() // 2, HEIGHT // 2 - 100))
 
@@ -244,12 +292,23 @@ async def game_main():
         text2 = font_big.render(msg, True, (255, 255, 120))
         screen.blit(text2, (WIDTH // 2 - text2.get_width() // 2, HEIGHT // 2))
 
-        # 顯示分數
         r = result["result"]
+
         # 🟩 保險寫法：確保有 p1 / p2
         p1_score = r.get("p1", {}).get("score", 0)
         p2_score = r.get("p2", {}).get("score", 0)
-        score_txt = f"分數：你 {p1_score}  vs  對手 {p2_score}"
+
+        # ✅ 取得自己 ID
+        my_id = net.state["me"]["id"]
+
+        # ✅ 根據身分決定顯示順序
+        if my_id == 1:
+            my_score, op_score = p1_score, p2_score
+        else:
+            my_score, op_score = p2_score, p1_score
+
+        # ✅ 組字串
+        score_txt = f"分數：你 {my_score}  vs  對手 {op_score}"
         text3 = font_small.render(score_txt, True, (200, 200, 200))
         screen.blit(text3, (WIDTH // 2 - text3.get_width() // 2, HEIGHT // 2 + 80))
 
