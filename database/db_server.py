@@ -7,8 +7,8 @@ from common.network import send_msg, recv_msg
 asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 logging.getLogger("asyncio").setLevel(logging.CRITICAL)
 
-HOST = "0.0.0.0"
-PORT = 9000
+HOST = "127.0.0.1"
+PORT = 14411
 
 # ----------------------------
 # 處理單一請求

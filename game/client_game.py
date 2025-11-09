@@ -1,13 +1,64 @@
 import pygame, asyncio, time
 from common.network import send_msg, recv_msg
-from game.game_server import SHAPES
+import sys
+
+
+SHAPES = {
+    "I": [
+        [(0,0),(1,0),(2,0),(3,0)],
+        [(2,-1),(2,0),(2,1),(2,2)],
+        [(0,1),(1,1),(2,1),(3,1)],
+        [(1,-1),(1,0),(1,1),(1,2)]
+    ],
+    "O": [
+        [(0,0),(1,0),(0,1),(1,1)]
+    ],
+    "T": [
+        [(1,0),(0,1),(1,1),(2,1)],
+        [(1,0),(1,1),(2,1),(1,2)],
+        [(0,1),(1,1),(2,1),(1,2)],
+        [(1,0),(0,1),(1,1),(1,2)]
+    ],
+    "L": [
+        [(0,0),(0,1),(0,2),(1,2)],
+        [(0,1),(1,1),(2,1),(0,2)],
+        [(0,0),(1,0),(1,1),(1,2)],
+        [(2,0),(0,1),(1,1),(2,1)]
+    ],
+    "J": [
+        [(1,0),(1,1),(1,2),(0,2)],
+        [(0,0),(0,1),(1,1),(2,1)],
+        [(0,0),(1,0),(0,1),(0,2)],
+        [(0,1),(1,1),(2,1),(2,2)]
+    ],
+    "S": [
+        [(1,0),(2,0),(0,1),(1,1)],
+        [(1,0),(1,1),(2,1),(2,2)],
+        [(1,1),(2,1),(0,2),(1,2)],
+        [(0,0),(0,1),(1,1),(1,2)]
+    ],
+    "Z": [
+        [(0,0),(1,0),(1,1),(2,1)],
+        [(2,0),(1,1),(2,1),(1,2)],
+        [(0,1),(1,1),(1,2),(2,2)],
+        [(1,0),(0,1),(1,1),(0,2)]
+    ]
+}
 
 
 WIDTH, HEIGHT = 900, 640
 CELL = 24
 MARGIN = 20
 
-HOST, PORT = "127.0.0.1", 9100
+HOST, PORT = "127.0.0.1", 16800
+if len(sys.argv) >= 3:
+    HOST = sys.argv[1]
+    PORT = int(sys.argv[2])
+elif len(sys.argv) == 2:
+    # 只傳 port，也可支援
+    PORT = int(sys.argv[1])
+
+
 
 COLOR_TABLE = {
     "I": (0, 200, 200),     # Cyan → 稍灰
@@ -74,7 +125,7 @@ class NetClient:
 
 # --- Pygame ---
 
-def draw_board(screen, board, ox, oy, cell_size=CELL):
+def draw_board(screen, board, ox, oy, cell_size=CELL,color=None):
     """畫出整個棋盤（背景格子 + 方塊 + 外框）"""
 
     # --- 1️⃣ 背景底格（空格顯示淺灰棋盤） ---
@@ -96,7 +147,10 @@ def draw_board(screen, board, ox, oy, cell_size=CELL):
             v = board[r][c]
             if not v:
                 continue
-            col = COLOR_TABLE.get(v, (200, 200, 200))
+            if color:
+                col = color
+            else:
+                col = COLOR_TABLE.get(v, (200, 200, 200))
             rect = pygame.Rect(
                 ox + c * cell_size,
                 oy + r * cell_size,
@@ -238,7 +292,7 @@ async def game_main():
                 draw_board(screen, me["board"], ox_me, oy_me)
                 draw_active(screen, me["active"], ox_me, oy_me)
             else:
-                draw_board(screen, me["board"], ox_me, oy_me)
+                draw_board(screen, me["board"], ox_me, oy_me, color=(100,100,100))
                 font_dead = pygame.font.SysFont("Microsoft JhengHei", 40)
                 txt_dead = font_dead.render("你已死亡", True, (255,120,120))
                 screen.blit(txt_dead, (

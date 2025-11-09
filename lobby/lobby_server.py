@@ -1,6 +1,9 @@
 import asyncio
 import logging
 from common.network import send_msg, recv_msg
+import socket
+import subprocess
+import time
 
 asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 logging.getLogger("asyncio").setLevel(logging.CRITICAL)
@@ -9,9 +12,25 @@ logging.getLogger("asyncio").setLevel(logging.CRITICAL)
 # 設定區
 # -------------------------------
 DB_HOST = "127.0.0.1"       # DB Server 位址
-DB_PORT = 9000              # DB Server 監聽埠
-LOBBY_HOST = "0.0.0.0"      # Lobby Server 對外開放 IP
-LOBBY_PORT = 8000           # Lobby Server 監聽埠
+DB_PORT = 14411              # DB Server 監聽埠
+
+
+
+
+def get_host_ip():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # 不需要真的連上網，這行只是讓 OS 幫我們找出出口介面 IP
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+    except Exception:
+        ip = "127.0.0.1"
+    finally:
+        s.close()
+    return ip
+
+LOBBY_HOST = get_host_ip()     # Lobby Server 對外開放 IP
+LOBBY_PORT = 14110           # Lobby Server 監聽埠
 db_reader = None
 db_writer = None
 
@@ -53,6 +72,20 @@ room_counter = 0
 # }
 invites = {}
 invite_counter = 0
+    
+def find_free_port(start=16800, end=16900):
+    import socket
+    for port in range(start, end):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind((LOBBY_HOST, port))
+                s.listen(1)  # 確保真的能 listen
+                return port
+            except OSError:
+                continue
+    raise RuntimeError("❌ 沒有可用的 port")
+
+
 
 # -------------------------------
 # 與 DB Server 溝通
@@ -211,13 +244,19 @@ async def handle_request(req, writer):
             guest_name = None
             if guest_id and guest_id in online_users:
                 guest_name = online_users[guest_id]["name"]
+                
+            
+            host = get_host_ip()
+            game_port = room.get("port")
 
             return {
                 "ok": True,
                 "status": room["status"],
                 "guest_joined": bool(guest_id),
                 "guest_id": guest_id,
-                "guest_name": guest_name
+                "guest_name": guest_name,
+                "game_host": host,
+                "game_port": game_port
             }
         
         elif action == "kick":
@@ -377,8 +416,31 @@ async def handle_request(req, writer):
 
     # === 4️⃣ Game 相關（之後開對戰伺服器用）===
     elif collection == "Game":
-        # 先只轉發給 DB（記錄對局），之後再改為啟動 game_server
-        return await db_request(req)
+        if action == "start":
+            rid = data.get("room_id")
+            room = rooms.get(rid)
+            
+            if not room:
+                return {"ok": False, "error": "房間不存在"}
+            
+            game_port = find_free_port(16800, 16900)
+            
+            print(f"🎮 房間 {rid} 要開始遊戲 → 啟動 Game Server on port {game_port}")
+            
+            subprocess.Popen(
+                ["python", "-m", "game.game_server", str(game_port)]
+            )
+            
+            room["status"] = "play"
+            room["port"] = game_port
+            
+            host= get_host_ip()
+            
+            return {
+                "ok": True,
+                "game_host": host,
+                "game_port": game_port
+            }
 
 
     # === 5️⃣ 其他未知請求 ===

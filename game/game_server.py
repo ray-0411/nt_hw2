@@ -2,8 +2,31 @@ import asyncio, time
 from collections import deque, defaultdict
 from typing import Dict, Any
 from common.network import send_msg, recv_msg  # 你現成的
+import sys
+import socket
 
-HOST, PORT = "0.0.0.0", 9100
+def get_host_ip():
+    """自動偵測這台機器對外可連線的 IP"""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))   # 不會真的傳資料，只是拿來問 OS 用哪張網卡出網
+        ip = s.getsockname()[0]
+    except Exception:
+        ip = "127.0.0.1"
+    finally:
+        s.close()
+    return ip
+
+
+HOST = get_host_ip()
+PORT = 16800
+if len(sys.argv) > 1:
+    try:
+        PORT = int(sys.argv[1])
+    except ValueError:
+        print("⚠️ 無效的 port 參數，使用預設值 10010")
+
+
 TPS = 30                         # 模擬頻率（ticks per second）
 SNAPSHOT_INTERVAL_MS = 100
 MATCH_SEC = None                   # 計時賽 60s

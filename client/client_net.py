@@ -1,11 +1,38 @@
 import asyncio
 from common.network import send_msg, recv_msg
 
+
+# 🟩 你自己的候選 Lobby IP 列表
+LOBBY_CANDIDATES = [
+    "127.0.0.1",        # 本機測試用
+    "140.113.xx.xx",    # 學校伺服器 IP（替換成真實值）
+    "192.168.0.10"      # 宿舍或 VPN 環境 IP（可選）
+]
+
+LOBBY_PORT = 14110
+
+async def connect_to_lobby():
+    """嘗試依序連接多個 Lobby IP，直到成功"""
+    for host in LOBBY_CANDIDATES:
+        try:
+            reader, writer = await asyncio.open_connection(host, LOBBY_PORT)
+            print(f"✅ 已連線到 Lobby Server：{host}:{LOBBY_PORT}")
+            return reader, writer
+        except Exception as e:
+            print(f"⚠️ 無法連線 {host}:{LOBBY_PORT} ({e})")
+    raise ConnectionError("❌ 所有候選 Lobby IP 都無法連線！")
+
+
 class LobbyClient:
     """封裝與 Lobby Server 的所有通訊邏輯"""
 
-    def __init__(self, host="127.0.0.1", port=8000):
-        self.host = host
+    def __init__(self, hosts=None, port=14110):
+        self.hosts = hosts or [
+            "140.113.66.30",   # my ip 
+            "127.0.0.1",       # 本機測試
+        ]
+        
+        self.host = self.hosts[0]  # 預設使用第一個 host
         self.port = port
         self.reader = None
         self.writer = None
@@ -14,7 +41,19 @@ class LobbyClient:
         self.lock = asyncio.Lock()
 
     async def connect(self):
-        self.reader, self.writer = await asyncio.open_connection(self.host, self.port)
+        """嘗試多個 IP，直到成功連線到 Lobby"""
+        for host in self.hosts:
+            try:
+                print(f"🔍 嘗試連線 Lobby：{host}:{self.port} ...")
+                self.reader, self.writer = await asyncio.open_connection(host, self.port)
+                self.host = host
+                print(f"✅ 已連線到 Lobby Server：{host}:{self.port}")
+                return True
+            except Exception as e:
+                print(f"⚠️ 無法連線 {host}:{self.port} ({e})")
+        print("❌ 所有候選 IP 都無法連線！")
+        return False
+
 
     async def close(self):
         if self.writer:
