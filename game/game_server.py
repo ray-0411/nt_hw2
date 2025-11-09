@@ -6,7 +6,7 @@ from common.network import send_msg, recv_msg  # 你現成的
 HOST, PORT = "0.0.0.0", 9100
 TPS = 30                         # 模擬頻率（ticks per second）
 SNAPSHOT_INTERVAL_MS = 100
-MATCH_SEC = 60                   # 計時賽 60s
+MATCH_SEC = None                   # 計時賽 60s
 GRAVITY_DROP_MS = 800            # 重力（固定）
 
 from game.bag import seven_bag_stream
@@ -84,7 +84,8 @@ class Game:
         self.bag = seven_bag_stream(self.seed)
         self.last_snapshot_ms = 0
         self.gravity_ms = GRAVITY_DROP_MS
-        self.mode = {"mode":"timed", "seconds": MATCH_SEC}
+        self.mode = {"mode": "endless", "seconds": None}
+
 
     def add_player(self, pid:int, p:Player):
         self.players[pid] = p
@@ -136,6 +137,39 @@ class Game:
             new_shape = SHAPES[kind][new_rot]
             if not self.collide(p.board, new_shape, x, y):
                 p.active["rot"] = new_rot
+        
+        elif ev == "HD":  # 🟩 Hard Drop（空白鍵）
+            drop = 0
+            while not self.collide(p.board, shape, x, y+1):
+                y += 1
+                drop += 1
+            p.active["y"] = y
+            # 鎖定到底部
+            self.lock_piece(p, [(a+x,b+y) for (a,b) in shape])
+            p.active = None
+            p.score += drop * 2   # 每下降一格 +2 分
+        
+        elif ev == "HOLD":  # 🟦 暫存方塊
+            if not p.can_hold or not p.active:
+                return  # 已經用過 Hold 或沒方塊可暫存
+
+            cur_kind = p.active["kind"]
+
+            if p.hold is None:
+                # 第一次 Hold：暫存目前方塊，生成新方塊
+                p.hold = cur_kind
+                p.active = None
+                self.ensure_active(p)
+            else:
+                # 已經有暫存方塊：交換
+                temp = p.hold
+                p.hold = cur_kind
+                p.active = {"kind": temp, "x": 3, "y": 0, "rot": 0}
+
+            p.can_hold = False  # 一顆方塊只能 Hold 一次
+        
+        
+
 
     def gravity_step(self, p: Player):
         if not p.alive:
@@ -165,14 +199,13 @@ class Game:
         return False
 
     def lock_piece(self, p, shape):
-        """鎖定方塊到棋盤並消行"""
         for (x, y) in shape:
             if y < 0:
                 p.alive = False
-                return  # 頂滿
+                return
             p.board[y][x] = 1
 
-        # 消行
+        # 🟩 消行
         full = [i for i,row in enumerate(p.board) if all(row)]
         for i in full:
             del p.board[i]
@@ -180,6 +213,13 @@ class Game:
         lines = len(full)
         p.lines += lines
         p.score += lines * 100
+
+        # 🟩 如果最上面一行有方塊 → Game Over
+        if any(p.board[0]):
+            p.alive = False
+
+        # 🟩 方塊鎖定後允許再次 Hold
+        p.can_hold = True
 
 
     def snapshot(self) -> Dict[str,Any]:
@@ -198,8 +238,8 @@ class Game:
                 "alive": p.alive
             })
         now_ms = int(time.time()*1000)
-        tl = max(0.0, self.mode["seconds"] - (time.monotonic()-self.start_monotonic))
-        return {"type":"snapshot","server_ms":now_ms,"players":players_view,"time_left": round(tl,1)}
+        return {"type": "snapshot", "server_ms": now_ms, "players": players_view}
+
 
 async def handle_player(reader:asyncio.StreamReader, writer:asyncio.StreamWriter, game:Game, pid:int):
     # welcome
@@ -270,21 +310,47 @@ async def game_loop(game:Game):
                 await send_msg(p.writer, snap)
             game.last_snapshot_ms = now_ms
 
-        # 4) 結束條件（計時）
-        if (time.monotonic()-game.start_monotonic) >= game.mode["seconds"]:
+        # 4) 檢查結束條件
+        alive_players = [p for p in game.players.values() if p.alive]
+        all_dead = len(alive_players) == 0
+        
+
+        if all_dead:
             game.finish = True
+            break
 
         await asyncio.sleep(tick_dt)
 
-    # 結算
+    # ===== 遊戲結算 =====
+    print("🏁 Game over, computing result...")
+
+    p1, p2 = game.players.values()
+    reason = "both_dead"
+
+    # 🏆 比較分數
+    if p1.score > p2.score:
+        winner = p1.id
+    elif p2.score > p1.score:
+        winner = p2.id
+    else:
+        winner = None  # 平手
+
     result = {
-        f"p{pid}": {"score":p.score, "lines":p.lines, "alive":p.alive}
-        for pid,p in game.players.items()
+        f"p{pid}": {"score": p.score, "lines": p.lines, "alive": p.alive}
+        for pid, p in game.players.items()
     }
-    msg = {"type":"game_over","reason":"timeout","result": result}
+
+    msg = {
+        "type": "game_over",
+        "reason": reason,
+        "winner": winner,
+        "result": result,
+    }
+
     for p in game.players.values():
         await send_msg(p.writer, msg)
-    print("🏁 Game over (timeout)")
+
+    print(f"🏁 Game over ({reason}), winner={winner}")
 
 async def main():
     game = Game()

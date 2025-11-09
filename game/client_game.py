@@ -18,6 +18,10 @@ class NetClient:
         self.player_id = None
         self.state = {"me":None, "op":None, "time_left":0.0}
         self.running = True
+        
+        self.hold = None
+        self.can_hold = True
+
 
     async def connect(self, host, port, name="Player"):
         self.reader, self.writer = await asyncio.open_connection(host, port)
@@ -43,6 +47,7 @@ class NetClient:
                 self._update_snapshot(m)
             elif t == "game_over":
                 print("GAME OVER:", m)
+                self.result = m
                 self.running = False
 
     def _update_snapshot(self, snap):
@@ -80,6 +85,21 @@ def draw_active(screen, active, ox, oy, color=(80,180,255)):
         rect = pygame.Rect(ox + (x+a)*CELL, oy + (y+b)*CELL, CELL-1, CELL-1)
         pygame.draw.rect(screen, color, rect)
 
+def draw_hold(screen, hold_kind, ox, oy, cell=12):
+    """畫出暫存方塊 (縮小版)"""
+    font_small = pygame.font.SysFont(None, 18)
+    pygame.draw.rect(screen, (80, 80, 90), (ox-5, oy-5, 6*cell, 6*cell), 2, border_radius=6)
+    label = font_small.render("HOLD", True, (230, 230, 230))
+    screen.blit(label, (ox, oy - 20))
+
+    if not hold_kind:
+        return
+
+    shape = SHAPES[hold_kind][0]  # 顯示第一個旋轉狀態即可
+    color = (100, 200, 255)       # 暫存顏色
+    for (x, y) in shape:
+        rect = pygame.Rect(ox + (x+1)*cell, oy + (y+1)*cell, cell-1, cell-1)
+        pygame.draw.rect(screen, color, rect)
 
 
 async def game_main():
@@ -94,6 +114,7 @@ async def game_main():
     clock = pygame.time.Clock()
 
     font = pygame.font.SysFont(None, 28)
+    
 
     while net.running:
         for e in pygame.event.get():
@@ -121,33 +142,123 @@ async def game_main():
         me = net.state["me"]
         op = net.state["op"]
 
-        # 左：自己；右：對手
-        ox_me, oy = MARGIN, MARGIN
-        ox_op = WIDTH//2 + MARGIN
+        # === 座標設定 ===
+        BOARD_W = 10 * CELL
+        BOARD_H = 20 * CELL
 
-        if me:
-            draw_board(screen, me["board"], ox_me, oy, (200,200,100))
-            draw_active(screen, me["active"], ox_me, oy, (255,240,120))
-            txt = font.render(f"Me  score:{me['score']}  lines:{me['lines']}", True, (230,230,230))
-            screen.blit(txt, (ox_me, oy+20*CELL+10))
+        CELL_OP = int(CELL * 0.6)
+        BOARD_W_OP = 10 * CELL_OP
+        BOARD_H_OP = 20 * CELL_OP
 
+        # 🔹 將整體往右移 100px
+        OFFSET_X = 100
+
+        ox_me = 100 + OFFSET_X                 # 自己棋盤位置
+        oy_me = (HEIGHT - BOARD_H) // 2 - 20
+
+        ox_op = ox_me + BOARD_W + 180          # 對手棋盤位置（靠右上）
+        oy_op = oy_me
+
+        # --- 對手棋盤（含 active 掉落方塊） ---
         if op:
-            draw_board(screen, op["board"], ox_op, oy, (120,180,220))
-            draw_active(screen, op["active"], ox_op, oy, (150,210,255))
-            txt = font.render(f"Rival  score:{op['score']}  lines:{op['lines']}", True, (230,230,230))
-            screen.blit(txt, (ox_op, oy+20*CELL+10))
+            # 棋盤
+            for r in range(20):
+                for c in range(10):
+                    v = op["board"][r][c]
+                    rect = pygame.Rect(ox_op + c * CELL_OP, oy_op + r * CELL_OP, CELL_OP - 1, CELL_OP - 1)
+                    pygame.draw.rect(screen, (40, 40, 50), rect, 0)
+                    if v:
+                        pygame.draw.rect(screen, (120, 180, 220), rect, 0)
 
-        # 時間
-        tl = net.state["time_left"]
-        if tl is not None:
-            ttxt = font.render(f"Time left: {tl:.1f}s", True, (230,230,230))
-            screen.blit(ttxt, (WIDTH//2 - 60, 10))
+            # 掉落方塊 (active)
+            if op["active"]:
+                kind = op["active"]["kind"]
+                rot = op["active"]["rot"]
+                x, y = op["active"]["x"], op["active"]["y"]
+                shape = SHAPES[kind][rot]
+                for (a, b) in shape:
+                    rect = pygame.Rect(ox_op + (x + a) * CELL_OP, oy_op + (y + b) * CELL_OP, CELL_OP - 1, CELL_OP - 1)
+                    pygame.draw.rect(screen, (150, 210, 255), rect)
+
+            # 外框
+            pygame.draw.rect(screen, (180,180,180),
+                            (ox_op-2, oy_op-2, BOARD_W_OP+4, BOARD_H_OP+4), 2)
+
+        # --- 自己棋盤（左側主要畫面） ---
+        if me:
+            if me["alive"]:
+                draw_board(screen, me["board"], ox_me, oy_me, (200,200,100))
+                draw_active(screen, me["active"], ox_me, oy_me, (255,240,120))
+            else:
+                draw_board(screen, me["board"], ox_me, oy_me, (100,100,100))
+                font_dead = pygame.font.SysFont("Microsoft JhengHei", 40)
+                txt_dead = font_dead.render("你已死亡", True, (255,120,120))
+                screen.blit(txt_dead, (
+                    ox_me + (BOARD_W // 2 - txt_dead.get_width() // 2),
+                    oy_me + (BOARD_H // 2 - txt_dead.get_height() // 2)
+                ))
+        
+        # --- HOLD 區塊 ---
+            cell_hold = int(CELL_OP * 1.2)
+            hold_x = ox_op
+            hold_y = oy_op + BOARD_H_OP + 30
+            draw_hold(screen, me.get("hold"), hold_x, hold_y, cell=cell_hold)
+
+            # --- 分數與等級（在 HOLD 下方） ---
+            font_info = pygame.font.SysFont("Microsoft JhengHei", 28)
+            info_y = hold_y + 6 * cell_hold + 12
+            text_sc = font_info.render(f"分數：{me['score']}", True, (230,230,230))
+            text_lv = font_info.render(f"等級：{me.get('level', 0)}", True, (230,230,230))
+            screen.blit(text_sc, (hold_x, info_y))
+            screen.blit(text_lv, (hold_x, info_y + 30))
 
         pygame.display.flip()
         clock.tick(60)
         await asyncio.sleep(0)  # 不阻塞 loop
 
+    
+    # --- 顯示結束畫面（雙方都死 / 時間到） ---
+    if hasattr(net, "result"):
+        result = net.result
+        reason = result.get("reason", "timeup")
+        winner = result.get("winner")
+
+        screen.fill((0, 0, 0))
+        # ✅ 使用支援中文的字型（不含 emoji）
+        font_big = pygame.font.SysFont("Microsoft JhengHei", 48)
+        font_small = pygame.font.SysFont("Microsoft JhengHei", 32)
+
+        # 標題
+        title_txt = f"遊戲結束（原因：{reason}）"
+        text = font_big.render(title_txt, True, (255, 255, 255))
+        screen.blit(text, (WIDTH // 2 - text.get_width() // 2, HEIGHT // 2 - 100))
+
+        # 判定勝負
+        if winner is None:
+            msg = "平手"
+        elif winner == net.player_id:
+            msg = "你贏了！"
+        else:
+            msg = "你輸了！"
+
+        text2 = font_big.render(msg, True, (255, 255, 120))
+        screen.blit(text2, (WIDTH // 2 - text2.get_width() // 2, HEIGHT // 2))
+
+        # 顯示分數
+        r = result["result"]
+        # 🟩 保險寫法：確保有 p1 / p2
+        p1_score = r.get("p1", {}).get("score", 0)
+        p2_score = r.get("p2", {}).get("score", 0)
+        score_txt = f"分數：你 {p1_score}  vs  對手 {p2_score}"
+        text3 = font_small.render(score_txt, True, (200, 200, 200))
+        screen.blit(text3, (WIDTH // 2 - text3.get_width() // 2, HEIGHT // 2 + 80))
+
+        pygame.display.flip()
+        await asyncio.sleep(5)
+    
+
     pygame.quit()
+    
 
 if __name__ == "__main__":
     asyncio.run(game_main())
