@@ -463,6 +463,7 @@ async def game_loop(game:Game):
         "type": "game_over",
         "reason": reason,
         "winner": winner,
+        "winner_user_id": winner_user_id,
         "result": result,
     }
 

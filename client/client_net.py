@@ -29,7 +29,7 @@ class LobbyClient:
     def __init__(self, hosts=None, port=14110):
         self.hosts = hosts or [
             "140.113.66.30",   # my ip 
-            "127.0.0.1",       # 本機測試
+            "140.113.17.11",   # school ip
         ]
         
         self.host = self.hosts[0]  # 預設使用第一個 host

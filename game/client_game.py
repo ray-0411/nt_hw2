@@ -356,7 +356,7 @@ async def game_main():
     if hasattr(net, "result"):
         result = net.result
         reason = result.get("reason", "timeup")
-        winner = result.get("winner")
+        winner_user_id = result.get("winner_user_id")
 
         screen.fill((0, 0, 0))
         # ✅ 使用支援中文的字型（不含 emoji）
@@ -369,9 +369,9 @@ async def game_main():
         screen.blit(text, (WIDTH // 2 - text.get_width() // 2, HEIGHT // 2 - 100))
 
         # 判定勝負
-        if winner is None:
+        if winner_user_id is None:
             msg = "平手"
-        elif winner == net.player_id:
+        elif winner_user_id == user_id:
             msg = "你贏了！"
         else:
             msg = "你輸了！"
