@@ -456,23 +456,28 @@ async def main():
     print(f"🎮 Game server on {HOST}:{PORT}, waiting players...")
 
     waiting = []
+    
+    accept_lock = asyncio.Lock()
 
     async def accept(reader, writer):
-        nonlocal waiting, game
-        if len(game.players) >= 2:
-            await send_msg(writer, {"type":"full"})
-            writer.close(); await writer.wait_closed()
-            return
-        pid = 1 if 1 not in game.players else 2
-        task = asyncio.create_task(handle_player(reader, writer, game, pid))
-        waiting.append(task)
+        nonlocal waiting, game, accept_lock
 
-        # 🟩 這裡改成等待 players 加入完畢後再檢查
-        await asyncio.sleep(0.5)   # 給 handle_player() 時間加進 game.players
+        async with accept_lock:  # 🔒 保證同時間只會進入一次
+            if len(game.players) >= 2:
+                await send_msg(writer, {"type":"full"})
+                writer.close(); await writer.wait_closed()
+                return
 
-        if len(game.players) == 2 and not getattr(game, "_started", False):
-            game._started = True
-            asyncio.create_task(game_loop(game))
+            pid = 1 if 1 not in game.players else 2
+            task = asyncio.create_task(handle_player(reader, writer, game, pid))
+            waiting.append(task)
+
+            # 等 handle_player() 加入
+            await asyncio.sleep(0.2)
+
+            if len(game.players) == 2 and not getattr(game, "_started", False):
+                game._started = True
+                asyncio.create_task(game_loop(game))
 
 
     server = await asyncio.start_server(accept, HOST, PORT)

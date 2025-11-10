@@ -33,41 +33,11 @@ async def handle_request(req: dict):
             elif action == "list_online":
                 return {"ok": True, "users": db.get_online_users()}
 
-        # ---------- Room ----------
-        elif collection == "Room":
-            if action == "create":
-                return db.create_room(
-                    data["name"],
-                    data["host_user_id"],
-                    data.get("visibility", "public"),
-                    data.get("password")
-                )
-            elif action == "list":
-                only_available = data.get("only_available", False)
-                return {"ok": True, "rooms": db.list_rooms(only_available)}
-            elif action == "close":
-                return db.close_room(data["room_id"], data["host_user_id"])
-            elif action == "join":
-                return db.join_room(data["room_id"], data["user_id"], data.get("password"))
-
-        # ---------- Invite ----------
-        elif collection == "Invite":
-            try:
-                if action == "create":
-                    return db.create_invite(
-                        data["room_id"],
-                        data["inviter_id"],
-                        data["invitee_id"]
-                    )
-            except Exception as e:
-                return {"ok": False, "error": str(e)}
-            
-
         # ---------- Game ----------
         elif collection == "Game":
-            pass
+            if action == "report":
+                return db.report_game_result(data)                
         
-
         return {"ok": False, "error": f"Unknown collection/action: {collection}/{action}"}
 
     except KeyError as e:

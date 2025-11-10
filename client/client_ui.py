@@ -334,6 +334,7 @@ async def room_wait_phase(client, room_id, room_name):
                 # --- 已有 guest 的選單 ---
                 if guest_joined:
                     if key == "1":  # 開始遊戲
+                        clear_screen()
                         print("🚀 開始遊戲！")
                         resp = await client._req("Game", "start", {"room_id": room_id})
 
@@ -342,7 +343,7 @@ async def room_wait_phase(client, room_id, room_name):
                             port = resp.get("game_port")
                             print(f"🎮 啟動遊戲客戶端連線到 {host}:{port}")
 
-                            print(f"🧩 啟動參數：['python', '-m', 'game.game_server', '{port}','{client.user_id}']")
+                            #print(f"🧩 啟動參數：['python', '-m', 'game.game_server', '{port}','{client.user_id}']")
                             subprocess.run(["python", "-m", "game.client_game", host, str(port), str(client.user_id)])
                             await client.close_room(room_id)
                         else:
@@ -460,6 +461,7 @@ async def guest_wait_phase(client, room_id, room_name):
                     break
 
                 if status == "play":
+                    clear_screen()
                     print("\n🚀 房主已開始遊戲！")
                     
                     game_host = resp.get("game_host")
@@ -468,7 +470,7 @@ async def guest_wait_phase(client, room_id, room_name):
                     if game_host and game_port:
                         print(f"🎮 連線到遊戲伺服器 {game_host}:{game_port} ...")
 
-                        print(f"🧩 啟動參數：['python', '-m', 'game.game_server', '{game_port}','''{client.user_id}']")
+                        #print(f"🧩 啟動參數：['python', '-m', 'game.game_server', '{game_port}','''{client.user_id}']")
                         subprocess.run(["python","-m","game.client_game", game_host, str(game_port),str(client.user_id)])
                         input("\n🔙 按下 Enter 鍵返回選單...")
                     else:

@@ -453,6 +453,18 @@ async def handle_request(req, writer):
                 sc = info.get("score")
                 lv = info.get("level")
                 print(f"  玩家 {uid}: 分數={sc}, 等級={lv}")
+            
+            resp = await db_request(req)
+            
+            if resp.get("ok"):
+                print(f"✅ DB Server 已成功寫入 {resp.get('count', '?')} 筆結果")
+            else:
+                print(f"⚠️ DB Server 寫入失敗: {resp.get('error')}")
+
+            # 🔸 最後回覆 Game Server 一個成功訊息
+            return {"ok": True}
+            
+            
 
 
     # === 5️⃣ 其他未知請求 ===
