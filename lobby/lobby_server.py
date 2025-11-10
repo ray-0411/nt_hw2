@@ -428,7 +428,7 @@ async def handle_request(req, writer):
             print(f"🎮 房間 {rid} 要開始遊戲 → 啟動 Game Server on port {game_port}")
             
             subprocess.Popen(
-                ["python", "-m", "game.game_server", str(game_port)]
+                ["python", "-m", "game.game_server", str(game_port),str(rid)]
             )
             
             room["status"] = "play"
@@ -441,6 +441,18 @@ async def handle_request(req, writer):
                 "game_host": host,
                 "game_port": game_port
             }
+        
+        elif action == "report":
+            data = req.get("data", {})
+            result = data.get("result", {})
+            winner = data.get("winner")
+
+            print(f"🏁 房間 {data.get('room_id')} 結束，勝方是 {winner}")
+            for key, info in result.items():
+                uid = info.get("user_id")
+                sc = info.get("score")
+                lv = info.get("level")
+                print(f"  玩家 {uid}: 分數={sc}, 等級={lv}")
 
 
     # === 5️⃣ 其他未知請求 ===

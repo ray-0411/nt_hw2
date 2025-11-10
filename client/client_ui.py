@@ -342,8 +342,8 @@ async def room_wait_phase(client, room_id, room_name):
                             port = resp.get("game_port")
                             print(f"🎮 啟動遊戲客戶端連線到 {host}:{port}")
 
-                            print(f"🧩 啟動參數：['python', '-m', 'game.game_server', '{port}']")
-                            subprocess.run(["python", "-m", "game.client_game", host, str(port)])
+                            print(f"🧩 啟動參數：['python', '-m', 'game.game_server', '{port}','{client.user_id}']")
+                            subprocess.run(["python", "-m", "game.client_game", host, str(port), str(client.user_id)])
                             await client.close_room(room_id)
                         else:
                             print(f"⚠️ 無法啟動遊戲：{resp.get('error')}")
@@ -468,8 +468,8 @@ async def guest_wait_phase(client, room_id, room_name):
                     if game_host and game_port:
                         print(f"🎮 連線到遊戲伺服器 {game_host}:{game_port} ...")
 
-                        print(f"🧩 啟動參數：['python', '-m', 'game.game_server', '{game_port}']")
-                        subprocess.run(["python","-m","game.client_game", game_host, str(game_port)])
+                        print(f"🧩 啟動參數：['python', '-m', 'game.game_server', '{game_port}','''{client.user_id}']")
+                        subprocess.run(["python","-m","game.client_game", game_host, str(game_port),str(client.user_id)])
                         input("\n🔙 按下 Enter 鍵返回選單...")
                     else:
                         print("⚠️ 無法取得遊戲伺服器資訊 (host/port)")

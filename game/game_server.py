@@ -4,6 +4,7 @@ from typing import Dict, Any
 from common.network import send_msg, recv_msg  # 你現成的
 import sys
 import socket
+import json
 
 def get_host_ip():
     """自動偵測這台機器對外可連線的 IP"""
@@ -20,11 +21,16 @@ def get_host_ip():
 
 HOST = get_host_ip()
 PORT = 16800
+LOBBY_PORT = 14110
+ROOM_ID = None
+
 if len(sys.argv) > 1:
     try:
         PORT = int(sys.argv[1])
     except ValueError:
         print("⚠️ 無效的 port 參數，使用預設值 10010")
+if len(sys.argv) > 2:
+    ROOM_ID = int(sys.argv[2])
 
 
 TPS = 30                         # 模擬頻率（ticks per second）
@@ -95,13 +101,14 @@ class Player:
         self.next_queue = deque()
         self.level = 0
         self.lines_cleared_total = 0
+        self.user_id = None 
 
     def enqueue_input(self, ev:str, when_ms:int):
         self.input_q.append((when_ms, ev))
 
 class Game:
     def __init__(self):
-        self.players: Dict[int, Player] = {}
+        self.players: Dict[int, Player,int] = {}
         self.start_monotonic = None
         self.t0_server_ms = None
         self.finish = False
@@ -110,6 +117,7 @@ class Game:
         self.last_snapshot_ms = 0
         self.gravity_ms = GRAVITY_DROP_MS
         self.mode = {"mode": "endless", "seconds": None}
+        
 
 
     def add_player(self, pid:int, p:Player):
@@ -288,8 +296,16 @@ async def handle_player(reader:asyncio.StreamReader, writer:asyncio.StreamWriter
 
     # hello
     msg = await recv_msg(reader)
-    name = msg.get("name","P"+str(pid)) if msg and msg.get("type")=="hello" else f"P{pid}"
+    
+    if msg and msg.get("type") == "hello":
+        name = msg.get("name", f"P{pid}")
+        user_id = msg.get("user_id")   # ✅ 建議用 user_id 比 player_id 一致
+    else:
+        name = f"P{pid}"
+        user_id = None
+    
     p = Player(pid, writer, name)
+    p.user_id = user_id
     game.add_player(pid, p)
     print(f"✅ Player{pid} connected: {name}")
 
@@ -381,13 +397,20 @@ async def game_loop(game:Game):
     # 🏆 比較分數
     if p1.score > p2.score:
         winner = p1.id
+        winner_user_id = p1.user_id
     elif p2.score > p1.score:
         winner = p2.id
+        winner_user_id = p2.user_id
     else:
         winner = None  # 平手
 
     result = {
-        f"p{pid}": {"score": p.score, "lines": p.lines, "alive": p.alive}
+        f"p{pid}": {
+            "user_id": getattr(p, "user_id", None),
+            "score": p.score,
+            "level": p.level,
+            "lines": p.lines,
+        }
         for pid, p in game.players.items()
     }
 
@@ -398,10 +421,34 @@ async def game_loop(game:Game):
         "result": result,
     }
 
+    
+
     for p in game.players.values():
         await send_msg(p.writer, msg)
+    
 
     print(f"🏁 Game over ({reason}), winner={winner}")
+    
+    payload = {
+        "collection": "Game",
+        "action": "report",
+        "data": {
+            "room_id": ROOM_ID,
+            "winner": winner_user_id,
+            "result": result
+        }
+    }
+
+    try:
+        # 用最基礎 TCP 傳送 JSON（Length-prefixed framing）
+        with socket.create_connection((HOST, LOBBY_PORT), timeout=5) as s:
+            data = json.dumps(payload).encode("utf-8")
+            s.sendall(len(data).to_bytes(4, "big") + data)
+            print("📤 已回報比賽結果給 Lobby Server")
+    except Exception as e:
+        print(f"⚠️ 回報 Lobby 失敗：{e}")
+    
+    
 
 async def main():
     game = Game()

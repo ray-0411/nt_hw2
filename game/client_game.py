@@ -51,12 +51,16 @@ CELL = 24
 MARGIN = 20
 
 HOST, PORT = "127.0.0.1", 16800
-if len(sys.argv) >= 3:
+
+if len(sys.argv) >= 2:
     HOST = sys.argv[1]
+if len(sys.argv) >= 3:
     PORT = int(sys.argv[2])
-elif len(sys.argv) == 2:
-    # 只傳 port，也可支援
-    PORT = int(sys.argv[1])
+if len(sys.argv) >= 4:
+    user_id = int(sys.argv[3])
+else:
+    user_id = 0
+
 
 
 
@@ -79,6 +83,7 @@ class NetClient:
         self.state = {"me":None, "op":None, "time_left":0.0}
         self.running = True
         
+        
         self.hold = None
         self.can_hold = True
 
@@ -88,7 +93,7 @@ class NetClient:
         # welcome
         w = await recv_msg(self.reader)
         self.player_id = w["player_id"]
-        await send_msg(self.writer, {"type":"hello","name": name})
+        await send_msg(self.writer, {"type":"hello","name": name, "user_id": user_id})
         # 等 start
         while True:
             m = await recv_msg(self.reader)
@@ -106,7 +111,7 @@ class NetClient:
             if t == "snapshot":
                 self._update_snapshot(m)
             elif t == "game_over":
-                print("GAME OVER:", m)
+                #print("GAME OVER:", m)
                 self.result = m
                 self.running = False
 
