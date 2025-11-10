@@ -2,9 +2,11 @@ import asyncio
 import logging
 from database import db_fun as db
 from common.network import send_msg, recv_msg
+import sys
 
 
-asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+if sys.platform.startswith("win"):
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 logging.getLogger("asyncio").setLevel(logging.CRITICAL)
 
 HOST = "127.0.0.1"
