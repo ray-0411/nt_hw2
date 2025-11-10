@@ -111,7 +111,35 @@ class NetClient:
             if t == "snapshot":
                 self._update_snapshot(m)
             elif t == "game_over":
-                #print("GAME OVER:", m)
+                result = m.get("result", {})
+                winner = m.get("winner")
+
+                # 🧩 各玩家結果
+                p1 = result.get("p1", {})
+                p2 = result.get("p2", {})
+
+                # 確認自己是哪一位
+                me_is_p1 = (getattr(self, "player_id", None) == 1)
+                me = result.get("p1") if me_is_p1 else result.get("p2")
+                op = result.get("p2") if me_is_p1 else result.get("p1")
+
+                # 取出資料
+                sc_me, lv_me = me.get("score", 0), me.get("level", 0)
+                sc_op, lv_op = op.get("score", 0), op.get("level", 0)
+
+                print("\n🏁 === 遊戲結束 ===")
+                print(f"🧍‍♂️ 你的分數：{sc_me}   等級：{lv_me}")
+                print(f"🎮 對手分數：{sc_op}   等級：{lv_op}")
+
+                # 勝負判斷
+                if winner is None:
+                    print("🤝 平手！")
+                elif winner == me.get("user_id"):
+                    print("🏆 你獲勝！")
+                else:
+                    print("😵 你輸了！")
+
+                # 結束
                 self.result = m
                 self.running = False
 
