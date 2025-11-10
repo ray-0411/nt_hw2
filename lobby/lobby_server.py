@@ -172,15 +172,15 @@ async def handle_request(req, writer):
                 result = []
                 
                 for rid, r in rooms.items():
-                    if only_available == "space":
-                        if r["status"] == "space":
-                            result.append({
-                                "id": rid,
-                                "name": r["name"],
-                                "host": online_users[r["host_id"]]["name"],
-                                "visibility": r["visibility"],
-                                "status": r["status"]
-                            })
+                    if only_available == r["status"]:
+                        result.append({
+                            "id": rid,
+                            "name": r["name"],
+                            "host": online_users[r["host_id"]]["name"],
+                            "visibility": r["visibility"],
+                            "status": r["status"]
+                        })
+                    
 
                 return {"ok": True, "rooms": result}
             except Exception as e:
@@ -305,6 +305,23 @@ async def handle_request(req, writer):
 
             return {"ok": False, "error": "你不在該房間中。"}
 
+        elif action == "watch":
+            rid = data.get("room_id")
+            room = rooms.get(rid)
+            
+            if not room:
+                return {"ok": False, "error": "Room not found."}
+            
+            host = get_host_ip()
+            game_port = room.get("port")
+
+            return {
+                "ok": True,
+                "game_host": host,
+                "game_port": game_port
+            }
+            
+        
     # === 3️⃣ Invite 相關 ===
     elif collection == "Invite":
         if action == "create":

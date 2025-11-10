@@ -82,7 +82,8 @@ async def lobby_phase(client: LobbyClient):
         print("3. 建立房間")
         print("4. 加入房間")
         print("5. 查看邀請")
-        print("6. 登出")
+        print("6. 觀戰遊戲")
+        print("7. 登出")
         cmd = input("請輸入指令：").strip()
 
         if cmd == "1":
@@ -259,8 +260,67 @@ async def lobby_phase(client: LobbyClient):
 
         elif cmd == "5":
             await invite_manage_phase(client)
-
+        
         elif cmd == "6":
+            finish = False
+            
+            while True:
+                clear_screen()
+                print("\n🚪 觀戰房間")
+
+                # 先列出房間清單
+                resp = await client.list_rooms(only_available="play")
+                rooms = resp.get("rooms", [])
+
+                if not rooms:
+                    print("（目前沒有可觀戰的房間）")
+                    input("\n🔙 按下 Enter 鍵返回選單...")
+                    finish = True
+                    break
+                
+                print("\n📋 可觀戰的房間清單：")
+                for i, r in enumerate(rooms, start=1):
+                    print(f"   {i}. {r['name']}（房主：{r['host']}）")
+                
+                try:
+                    choice = int(input("\n請輸入要觀戰的房間 ID（0 返回）：").strip())
+                    if choice == 0:
+                        finish = True
+                        break
+                except ValueError:
+                    print("⚠️ 請輸入有效的房間 ID。")
+                    time.sleep(1)
+                    continue
+                
+                if 1 <= choice <= len(rooms):
+                    target_room = rooms[choice - 1]
+                    rid = target_room["id"]
+                else:
+                    print("❌ 沒有這個房間。")
+                    time.sleep(1)
+                    continue
+
+                # 如果選擇的房間沒問題就跳出迴圈
+                break
+
+            if finish:
+                continue
+            
+            clear_screen()
+            
+            resp = await client._req("Room", "watch", {"room_id": rid})
+            
+            host = resp.get("game_host")
+            port = resp.get("game_port")
+            
+            if host and port:
+                #✅ 觀戰連線
+                print(f"🎮 連線到遊戲伺服器 {host}:{port} ...")
+                subprocess.run(["python","-m","game.game_watch", host, str(port)])
+                
+                input("\n🔙 按下 Enter 鍵返回選單...")
+
+        elif cmd == "7":
             resp = await client.logout()
             username = resp.get('name', '玩家')
             if resp.get("ok"):
