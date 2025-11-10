@@ -109,6 +109,8 @@ class Player:
 class Game:
     def __init__(self):
         self.players: Dict[int, Player,int] = {}
+        self.watchers: Dict[str, asyncio.StreamWriter] = {}
+        
         self.start_monotonic = None
         self.t0_server_ms = None
         self.finish = False
@@ -323,6 +325,31 @@ async def handle_player(reader:asyncio.StreamReader, writer:asyncio.StreamWriter
     finally:
         p.alive = False
 
+async def handle_watcher(reader, writer, game, wid):
+    """觀戰者獨立處理，不干擾主程式"""
+    await send_msg(writer, {"type": "welcome", "id": wid})
+    print(f"👀 Watcher {wid} 已啟動")
+
+    try:
+        # 觀戰者只接收，不回傳
+        while not game.finish:
+            await asyncio.sleep(1)  # 保持 loop 活著
+    except Exception as e:
+        print(f"⚠️ 觀戰者 {wid} 發生錯誤: {e}")
+    finally:
+        if wid in game.watchers:
+            del game.watchers[wid]
+        try:
+            writer.close()
+            await writer.wait_closed()
+        except:
+            pass
+        print(f"👋 Watcher {wid} 離開")
+
+
+
+
+
 async def game_loop(game:Game):
     # 開場廣播 start（延遲 1 秒對齊）
     game.t0_server_ms = int(time.time()*1000) + 1000
@@ -373,8 +400,25 @@ async def game_loop(game:Game):
         # 3) 廣播 snapshot（每 100ms 一次）
         if now_ms - game.last_snapshot_ms >= SNAPSHOT_INTERVAL_MS:
             snap = game.snapshot()
+            
+            
             for p in game.players.values():
                 await send_msg(p.writer, snap)
+                
+            if hasattr(game, "watchers"):
+                for wid, w in list(game.watchers.items()):
+                    async def send_to_watcher(wid, w):
+                        try:
+                            await send_msg(w, snap)
+                        except Exception as e:
+                            print(f"⚠️ 傳送 snapshot 給觀戰者 {wid} 失敗：{e}")
+                            if wid in game.watchers:
+                                del game.watchers[wid]
+                    # 👇 不 await，直接啟動任務
+                    asyncio.create_task(send_to_watcher(wid, w))
+                        
+                        
+                        
             game.last_snapshot_ms = now_ms
 
         # 4) 檢查結束條件
@@ -394,6 +438,7 @@ async def game_loop(game:Game):
     p1, p2 = game.players.values()
     reason = "both_dead"
 
+    winner_user_id = None
     # 🏆 比較分數
     if p1.score > p2.score:
         winner = p1.id
@@ -425,6 +470,15 @@ async def game_loop(game:Game):
 
     for p in game.players.values():
         await send_msg(p.writer, msg)
+        
+    if hasattr(game, "watchers") and game.watchers:
+        for wid, w in list(game.watchers.items()):
+            try:
+                await send_msg(w, msg)
+            except Exception as e:
+                print(f"⚠️ 傳送 game_over 給觀戰者 {wid} 失敗：{e}")
+                if wid in game.watchers:
+                    del game.watchers[wid]
     
 
     print(f"🏁 Game over ({reason}), winner={winner}")
@@ -461,12 +515,16 @@ async def main():
 
     async def accept(reader, writer):
         nonlocal waiting, game, accept_lock
+        
+        if len(game.players) >= 2:
+            watcher_id = f"W{len(game.watchers)+1}"
+            game.watchers[watcher_id] = writer
+            print(f"👀 Watcher connected: {watcher_id}")
+            # 🔸 啟動獨立 watcher task，不 await！
+            asyncio.create_task(handle_watcher(reader, writer, game, watcher_id))
+            return
 
         async with accept_lock:  # 🔒 保證同時間只會進入一次
-            if len(game.players) >= 2:
-                await send_msg(writer, {"type":"full"})
-                writer.close(); await writer.wait_closed()
-                return
 
             pid = 1 if 1 not in game.players else 2
             task = asyncio.create_task(handle_player(reader, writer, game, pid))
