@@ -134,7 +134,7 @@ class NetClient:
                 # 勝負判斷
                 if winner is None:
                     print("🤝 平手！")
-                elif winner == me.get("user_id"):
+                elif winner == self.player_id:
                     print("🏆 你獲勝！")
                 else:
                     print("😵 你輸了！")
@@ -356,6 +356,7 @@ async def game_main():
     if hasattr(net, "result"):
         result = net.result
         reason = result.get("reason", "timeup")
+        winner = result.get("winner")
         winner_user_id = result.get("winner_user_id")
 
         screen.fill((0, 0, 0))
@@ -369,9 +370,9 @@ async def game_main():
         screen.blit(text, (WIDTH // 2 - text.get_width() // 2, HEIGHT // 2 - 100))
 
         # 判定勝負
-        if winner_user_id is None:
+        if winner is None:
             msg = "平手"
-        elif winner_user_id == user_id:
+        elif winner == net.player_id:
             msg = "你贏了！"
         else:
             msg = "你輸了！"
